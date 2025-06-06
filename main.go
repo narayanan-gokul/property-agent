@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"math"
 	"os"
+	"bufio"
+	"log"
 )
 
 const BUFFER_SIZE int = 4096
@@ -62,7 +64,7 @@ func extractLinkFromChunk(chunk []byte) string {
 func makeRequest(client *http.Client, URL string) *http.Response {
 	req, err := http.NewRequest("GET", URL, nil)
 	if err != nil {
-		fmt.Println("Request creation error:", err)
+		log.Println("Request creation error:", err)
 	}
 
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
@@ -72,9 +74,9 @@ func makeRequest(client *http.Client, URL string) *http.Response {
 	)
 	resp, err := client.Do(req)
 	if err != nil {
-		fmt.Println("Request failed:", err)
+		log.Println("Request failed:", err)
 	}
-	// fmt.Println("Request status:", resp.Status)
+	log.Println("Request status:", resp.Status)
 	return resp
 }
 
@@ -87,7 +89,7 @@ func getListings(client *http.Client, page int) (listings []string) {
 		bytesRead, err := io.ReadAtLeast(
 			resp.Body, buffer, BUFFER_SIZE)
 		if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF {
-			fmt.Println("Error getting listings: ", err)
+			log.Println("Error getting listings: ", err)
 		}
 		if bytesRead == 0 {
 			break
@@ -122,7 +124,7 @@ func (listing Listing) prettyPrint() {
 
 func (listing Listing) filePrintString() string {
 	return fmt.Sprintf(
-		"- [%s](%s)\n\t- Price: $%.0f\n\t- Available: %s\n\t- Location: %f, %f",
+		"- [%s](%s)\n\t- Price: $%.0f\n\t- Available: %s\n\t- Location: %f, %f\n",
 		listing.address,
 		listing.link,
 		listing.price,
@@ -163,7 +165,7 @@ func extractListing(client *http.Client, link string) *Listing {
 		buffer := make([]byte, BUFFER_SIZE)
 		bytesRead, err := io.ReadAtLeast(resp.Body, buffer, BUFFER_SIZE)
 		if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF {
-			fmt.Println("Error reading listing %s:", link, err)
+			log.Println("Error reading listing %s:", link, err)
 		}
 		if bytesRead == 0 {
 			break
@@ -213,8 +215,8 @@ func extractListing(client *http.Client, link string) *Listing {
 		availabilityDate, err := time.Parse(time.RFC822, fmt.Sprintf("%s %s %s 00:00 IST", day, month, year))
 		
 		if err != nil {
-			fmt.Println("Error parsing date:", err)
-			fmt.Println(link)
+			log.Println("Error parsing date:", err)
+			log.Println(link)
 		}
 		listing.availability = availabilityDate
 	}
@@ -229,11 +231,11 @@ func extractListing(client *http.Client, link string) *Listing {
 
 	long, err := strconv.ParseFloat(longString, 64)
 	if err != nil {
-		fmt.Println("Error parsing longitude:", err)
+		log.Println("Error parsing longitude:", err)
 	}
 	lat, err:= strconv.ParseFloat(latString, 64)
 	if err != nil {
-		fmt.Println("Error parsing latitude:", err)
+		log.Println("Error parsing latitude:", err)
 	}
 	listing.latitude = lat
 	listing.longitude = long
@@ -244,8 +246,8 @@ func extractListing(client *http.Client, link string) *Listing {
 	}
 	price, err = strconv.ParseFloat(priceString, 64)
 	if err != nil {
-		fmt.Println("Error parsing price:", err)
-		fmt.Println(link)
+		log.Println("Error parsing price:", err)
+		log.Println(link)
 	}
 	listing.price = price
 	listing.link = link
@@ -267,47 +269,24 @@ func filterListings(client *http.Client, listings []string, availableDate time.T
 func testInclude(client *http.Client) {
 	url := "https://www.domain.com.au/105-14-mcgill-street-lewisham-nsw-2049-12487121"
 	listing := extractListing(client, url)
-	fmt.Println(listing.filePrintString())
+	log.Println(listing.filePrintString())
 }
 
-func handleFile() {
-	saveFile, err := os.ReadFile("./properties.md")
-	if err == os.ErrNotExist {
-		saveFile.Close()
-		saveFile, err = os.Create("./properties.md")
-		defer saveFile.Close()
-		if err != nil {
-			fmt.Println("Error creating file properties.md:", err)
-		}
-	} else if err != nil {
-		fmt.Println("Error opening file properties.md:", err)
-	}
+func createPropertiesFile(listings []*Listing) {
+	fileName := fmt.Sprintf("properties-%s.md", time.Now().Format(time.DateTime))
+	propertiesFile, err := os.Create(fmt.Sprintf("%s/%s", os.Args[1], fileName))
+	defer propertiesFile.Close()
 	if err != nil {
-
+		log.Println("Error creating file properties.md:", err)
 	}
-	// firstTime := false
-	// file, err := os.ReadFile("./visited-links.txt")
-	// defer file.Close()
-	// if err == os.ErrNotExist {
-	// 	
-	// } else if err != nil {
-	// 	fmt.Println("Error reading file:", err)
-	// } else {
-	// 	scanner := bufio.NewScanner(file)
-	// 	linkMap := make(map[string]int)
-	// 	newListings := make([]string, 0)
-
-	// 	for scanner.Scan() {
-	// 		linkMap[scanner.Text()] = 0
-	// 	}
-	// 	
-	// 	for _, listing := range listings {
-	// 		val, exists := linkMap[listing]
-	// 		if !exists {
-	// 			newListings = append(newListings, listing)
-	// 		}
-	// 	}
-	// }
+	writer := bufio.NewWriter(propertiesFile)
+	for _, listing := range listings {
+		_, err = writer.WriteString(listing.filePrintString())
+		if err != nil {
+			log.Println("Error writing to properties file:", err)
+		}
+	}
+	writer.Flush()
 }
 
 func main() {
@@ -320,6 +299,7 @@ func main() {
 		Timeout:   10 * time.Second,
 	}
 
+	log.Println("Fetching listings")
 	var listings []string
 	page := 1
 	for {
@@ -333,11 +313,9 @@ func main() {
 
 	availableFrom, err := time.Parse(time.DateOnly, "2025-06-30")
 	if err != nil {
-		fmt.Println(err)
+		log.Println(err)
 	}
 
 	filteredListings := filterListings(client, listings, availableFrom, 4.0)
-	for _, filteredListing := range filteredListings {
-		fmt.Println(filteredListing.filePrintString())
-	}
+	createPropertiesFile(filteredListings)
 }
