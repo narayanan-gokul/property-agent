@@ -1,0 +1,4 @@
+Suburbs = [ "darlington-nsw-2008" , "redfern-nsw-2016" , "ultimo-nsw-2007" , "glebe-nsw-2037" , "surry-hills-nsw-2010" , "newtown-nsw-2042" , "pyrmont-nsw-2009" , "chippendale-nsw-2008" , "annandale-nsw-2038" , "eveleigh-nsw-2015" ]
+Availability = 2025-07-01T00:00:00Z
+MaxDistance = 8.0
+TempFolder = "./temp/"

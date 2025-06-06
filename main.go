@@ -11,7 +11,49 @@ import (
 	"os"
 	"bufio"
 	"log"
+
+	"github.com/BurntSushi/toml"
 )
+
+type Config struct {
+	Suburbs []string
+	Availability time.Time
+	MaxDistance float64
+	TempFolder string
+}
+
+type Listing struct {
+	address string
+	price float64
+	longitude float64
+	latitude float64
+	availability time.Time
+	link string
+}
+
+func (listing Listing) prettyPrint() {
+	fmt.Printf(
+		"%s\n%f\nAvailable: %s\nLocation: longitude: %f latitude: %f\n",
+		listing.address,
+		listing.price,
+		listing.availability.Format(time.DateOnly),
+		listing.longitude,
+		listing.latitude,
+	)
+}
+
+func (listing Listing) filePrintString() string {
+	return fmt.Sprintf(
+		"- [%s](%s)\n\t- Price: $%.0f\n\t- Available: %s\n\t- Location: %f, %f\n",
+		listing.address,
+		listing.link,
+		listing.price,
+		listing.availability.Format(time.DateOnly),
+		listing.latitude,
+		listing.longitude,
+	)
+}
+
 
 const BUFFER_SIZE int = 4096
 
@@ -80,8 +122,12 @@ func makeRequest(client *http.Client, URL string) *http.Response {
 	return resp
 }
 
-func getListings(client *http.Client, page int) (listings []string) {
-	URL := fmt.Sprintf("https://www.domain.com.au/rent/?suburb=darlington-nsw-2008,redfern-nsw-2016,ultimo-nsw-2007,glebe-nsw-2037,surry-hills-nsw-2010,newtown-nsw-2042,pyrmont-nsw-2009,chippendale-nsw-2008,annandale-nsw-2038,eveleigh-nsw-2015,stanmore-nsw-2048,leichhardt-nsw-2040&bedrooms=2-any&bathrooms=2-any&price=0-1000&availableto=2025-07-14&excludedeposittaken=1&page=%d", page) 
+func getListings(client *http.Client, suburbs []string, page int) (listings []string) {
+	URL := fmt.Sprintf(
+		"https://www.domain.com.au/rent/?%s&bedrooms=2-any&bathrooms=2-any&price=0-1000&availableto=2025-07-14&excludedeposittaken=1&page=%d",
+		strings.Join(suburbs, ","),
+		page,
+	) 
 	resp := makeRequest(client, URL)
 	defer resp.Body.Close()
 	for {
@@ -100,38 +146,6 @@ func getListings(client *http.Client, page int) (listings []string) {
 		}
 	}
 	return listings
-}
-
-type Listing struct {
-	address string
-	price float64
-	longitude float64
-	latitude float64
-	availability time.Time
-	link string
-}
-
-func (listing Listing) prettyPrint() {
-	fmt.Printf(
-		"%s\n%f\nAvailable: %s\nLocation: longitude: %f latitude: %f\n",
-		listing.address,
-		listing.price,
-		listing.availability.Format(time.DateOnly),
-		listing.longitude,
-		listing.latitude,
-	)
-}
-
-func (listing Listing) filePrintString() string {
-	return fmt.Sprintf(
-		"- [%s](%s)\n\t- Price: $%.0f\n\t- Available: %s\n\t- Location: %f, %f\n",
-		listing.address,
-		listing.link,
-		listing.price,
-		listing.availability.Format(time.DateOnly),
-		listing.latitude,
-		listing.longitude,
-	)
 }
 
 func (listing Listing) distanceFrom(lat float64, lng float64) float64 {
@@ -290,6 +304,7 @@ func createPropertiesFile(listings []*Listing) {
 }
 
 func main() {
+	log.Println("Initializing client")
 	tr := &http.Transport{
 		ForceAttemptHTTP2: false,
 	}
@@ -299,11 +314,18 @@ func main() {
 		Timeout:   10 * time.Second,
 	}
 
+	log.Println("Fetching config")
+	var config Config
+	_, err := toml.DecodeFile("config.toml", &config)
+	if err != nil {
+		log.Println("Error fetching config file:", err)
+	}
+
 	log.Println("Fetching listings")
 	var listings []string
 	page := 1
 	for {
-		resultsPerPage := getListings(client, page)
+		resultsPerPage := getListings(client, config.Suburbs, page)
 		if len(resultsPerPage) == 0 {
 			break
 		}
@@ -311,11 +333,6 @@ func main() {
 		page++
 	}
 
-	availableFrom, err := time.Parse(time.DateOnly, "2025-06-30")
-	if err != nil {
-		log.Println(err)
-	}
-
-	filteredListings := filterListings(client, listings, availableFrom, 4.0)
+	filteredListings := filterListings(client, listings, config.Availability, config.MaxDistance)
 	createPropertiesFile(filteredListings)
 }
