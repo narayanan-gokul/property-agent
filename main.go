@@ -11,6 +11,8 @@ import (
 	"os"
 	"bufio"
 	"log"
+	"path"
+	"errors"
 
 	"github.com/BurntSushi/toml"
 )
@@ -52,6 +54,28 @@ func (listing Listing) filePrintString() string {
 		listing.latitude,
 		listing.longitude,
 	)
+}
+
+func (listing Listing) distanceFrom(lat float64, lng float64) float64 {
+	const PI float64 = 3.141592653589793
+	
+	radlat1 := float64(PI * listing.latitude / 180)
+	radlat2 := float64(PI * lat / 180)
+	
+	theta := float64(listing.longitude - lng)
+	radtheta := float64(PI * theta / 180)
+	
+	dist := math.Sin(radlat1) * math.Sin(radlat2) + math.Cos(radlat1) * math.Cos(radlat2) * math.Cos(radtheta)
+	
+	if dist > 1 {
+		dist = 1
+	}
+	
+	dist = math.Acos(dist)
+	dist = dist * 180 / PI
+	dist = dist * 60 * 1.1515
+	
+	return dist * 1.609344
 }
 
 
@@ -103,7 +127,7 @@ func extractLinkFromChunk(chunk []byte) string {
 	return ""
 }
 
-func makeRequest(client *http.Client, URL string) *http.Response {
+func makeRequest(client *http.Client, URL string, metadata string) *http.Response {
 	req, err := http.NewRequest("GET", URL, nil)
 	if err != nil {
 		log.Println("Request creation error:", err)
@@ -118,17 +142,17 @@ func makeRequest(client *http.Client, URL string) *http.Response {
 	if err != nil {
 		log.Println("Request failed:", err)
 	}
-	log.Println("Request status:", resp.Status)
+	log.Printf("[%s] Request status: %s\n", metadata, resp.Status)
 	return resp
 }
 
 func getListings(client *http.Client, suburbs []string, page int) (listings []string) {
 	URL := fmt.Sprintf(
-		"https://www.domain.com.au/rent/?%s&bedrooms=2-any&bathrooms=2-any&price=0-1000&availableto=2025-07-14&excludedeposittaken=1&page=%d",
+		"https://www.domain.com.au/rent/?suburb=%s&bedrooms=2-any&bathrooms=2-any&price=0-1000&availableto=2025-07-14&excludedeposittaken=1&page=%d",
 		strings.Join(suburbs, ","),
 		page,
 	) 
-	resp := makeRequest(client, URL)
+	resp := makeRequest(client, URL, "GetAllListings")
 	defer resp.Body.Close()
 	for {
 		buffer := make([]byte, BUFFER_SIZE)
@@ -148,33 +172,14 @@ func getListings(client *http.Client, suburbs []string, page int) (listings []st
 	return listings
 }
 
-func (listing Listing) distanceFrom(lat float64, lng float64) float64 {
-	const PI float64 = 3.141592653589793
-	
-	radlat1 := float64(PI * listing.latitude / 180)
-	radlat2 := float64(PI * lat / 180)
-	
-	theta := float64(listing.longitude - lng)
-	radtheta := float64(PI * theta / 180)
-	
-	dist := math.Sin(radlat1) * math.Sin(radlat2) + math.Cos(radlat1) * math.Cos(radlat2) * math.Cos(radtheta)
-	
-	if dist > 1 {
-		dist = 1
-	}
-	
-	dist = math.Acos(dist)
-	dist = dist * 180 / PI
-	dist = dist * 60 * 1.1515
-	
-	return dist * 1.609344
-}
-
-func extractListing(client *http.Client, link string) *Listing {
+func extractListing(client *http.Client, link string) (*Listing, error) {
 	var listing Listing
 	page := make([]byte, 0)
-	resp := makeRequest(client, link)
+	resp := makeRequest(client, link, fmt.Sprintf("FetchListing:%s", link))
 	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		return &listing, errors.New("Server error")
+	}
 	for {
 		buffer := make([]byte, BUFFER_SIZE)
 		bytesRead, err := io.ReadAtLeast(resp.Body, buffer, BUFFER_SIZE)
@@ -187,14 +192,16 @@ func extractListing(client *http.Client, link string) *Listing {
 		page = append(page, buffer...)
 	}
 
+	log.Printf("[Fetching price]\n")
 	priceStart := substringSearch(
 		page,
 		[]byte("<div data-testid=\"listing-details__summary-title\" class=\"css-twgrok\">"),
-		0,)
+		0,
+	)
 	priceStart = substringSearch(page, []byte("$"), priceStart) + 1
 	priceEnd := substringSearch(page, []byte(" "), priceStart)
 	priceString := string(page[priceStart:priceEnd])
-
+	log.Printf("[Fetching address]\n")
 	addressStart := substringSearch(
 		page,
 		[]byte("<h1 class=\"css-hkh81z\">"),
@@ -203,6 +210,7 @@ func extractListing(client *http.Client, link string) *Listing {
 	addressEnd := substringSearch(page, []byte("</h1>"), addressStart)
 	listing.address = string(page[addressStart:addressEnd])
 
+	log.Printf("[Fetching availability]\n")
 	availabilityDateStart := substringSearch(
 		page,
 		[]byte("Available from<!"),
@@ -235,6 +243,7 @@ func extractListing(client *http.Client, link string) *Listing {
 		listing.availability = availabilityDate
 	}
 
+	log.Printf("[Fetching location]\n")
 	locationStart := substringSearch(page, []byte("maps.googleapis.com/maps/api/staticmap?center="), availabilityDateEnd)
 	locationStart = substringSearch(page, []byte("center="), locationStart) + 7
 	locationEnd := substringSearch(page, []byte("\\u0026"), locationStart)
@@ -254,9 +263,12 @@ func extractListing(client *http.Client, link string) *Listing {
 	listing.latitude = lat
 	listing.longitude = long
 
+	fmt.Println(priceString)
 	price, err := strconv.ParseFloat(priceString, 64)
 	if err != nil {
-		priceString = priceString[:substringSearch([]byte(priceString), []byte("<"), 0)]
+		priceString = strings.Split(priceString, "/")[0]
+		priceString = strings.Join(strings.Split(priceString, ","), "")
+		priceString = strings.Split(priceString, "<")[0]
 	}
 	price, err = strconv.ParseFloat(priceString, 64)
 	if err != nil {
@@ -266,14 +278,16 @@ func extractListing(client *http.Client, link string) *Listing {
 	listing.price = price
 	listing.link = link
 
-	return &listing
+	return &listing, nil
 }
 
 func filterListings(client *http.Client, listings []string, availableDate time.Time, distance float64) []*Listing{
 	filteredListings := make([]*Listing, 0)
 	for _, listing := range listings {
-		extractedListing := extractListing(client, listing)
-		if !(extractedListing.distanceFrom(-33.888636, 151.187301) > distance) && availableDate.Before(extractedListing.availability) {
+		extractedListing, err := extractListing(client, listing)
+		if err != nil {
+			continue
+		} else if !(extractedListing.distanceFrom(-33.888636, 151.187301) > distance) && availableDate.Before(extractedListing.availability) {
 			filteredListings = append(filteredListings, extractedListing)
 		}
 	}
@@ -281,18 +295,20 @@ func filterListings(client *http.Client, listings []string, availableDate time.T
 }
 
 func testInclude(client *http.Client) {
-	url := "https://www.domain.com.au/105-14-mcgill-street-lewisham-nsw-2049-12487121"
-	listing := extractListing(client, url)
+	url := "https://www.domain.com.au/26-44-48-cooper-st-strathfield-nsw-2135-17599990"
+	listing, _ := extractListing(client, url)
 	log.Println(listing.filePrintString())
 }
 
-func createPropertiesFile(listings []*Listing) {
+func createPropertiesFile(listings []*Listing, tempFolder string) {
 	fileName := fmt.Sprintf("properties-%s.md", time.Now().Format(time.DateTime))
-	propertiesFile, err := os.Create(fmt.Sprintf("%s/%s", os.Args[1], fileName))
+	log.Println("Creating file", fileName)
+	propertiesFile, err := os.Create(path.Join( tempFolder, fileName))
 	defer propertiesFile.Close()
 	if err != nil {
 		log.Println("Error creating file properties.md:", err)
 	}
+	log.Println("Writing listings to file")
 	writer := bufio.NewWriter(propertiesFile)
 	for _, listing := range listings {
 		_, err = writer.WriteString(listing.filePrintString())
@@ -304,6 +320,8 @@ func createPropertiesFile(listings []*Listing) {
 }
 
 func main() {
+	startTime := time.Now()
+
 	log.Println("Initializing client")
 	tr := &http.Transport{
 		ForceAttemptHTTP2: false,
@@ -331,8 +349,16 @@ func main() {
 		}
 		listings = append(listings, resultsPerPage...)
 		page++
+		time.Sleep(1 * time.Second)
 	}
 
 	filteredListings := filterListings(client, listings, config.Availability, config.MaxDistance)
-	createPropertiesFile(filteredListings)
+	createPropertiesFile(filteredListings, config.TempFolder)
+
+	endTime := time.Now()
+
+	log.Println("Operation complete.")
+	fmt.Println("Total listings:", len(listings))
+	fmt.Println("Listings matching criteria:", len(filteredListings))
+	fmt.Println("Time elapsed:", endTime.Sub(startTime) / time.Minute)
 }

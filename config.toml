@@ -1,4 +1,30 @@
-Suburbs = [ "darlington-nsw-2008" , "redfern-nsw-2016" , "ultimo-nsw-2007" , "glebe-nsw-2037" , "surry-hills-nsw-2010" , "newtown-nsw-2042" , "pyrmont-nsw-2009" , "chippendale-nsw-2008" , "annandale-nsw-2038" , "eveleigh-nsw-2015" ]
+Suburbs = [ 
+	"darlington-nsw-2008",
+	"redfern-nsw-2016",
+	"ultimo-nsw-2007",
+	"glebe-nsw-2037",
+	"surry-hills-nsw-2010",
+	"newtown-nsw-2042",
+	"pyrmont-nsw-2009",
+	"chippendale-nsw-2008",
+	"annandale-nsw-2038",
+	"eveleigh-nsw-2015",
+	"marrickville-nsw-2204",
+	"petersham-nsw-2049",
+	"ashfield-nsw-2131",
+	"rosebery-nsw-2018",
+	"parramatta-nsw-2150",
+	"auburn-nsw-2144",
+	"villawood-nsw-2163",
+	"yagoona-nsw-2199",
+	"bankstown-nsw-2200",
+	"burwood-nsw-2134",
+	"kingsgrove-nsw-2208",
+	"petersham-nsw-2049",
+	"artarmon-nsw-2064",
+	"north-sydney-nsw-2060"
+]
+
 Availability = 2025-07-01T00:00:00Z
-MaxDistance = 8.0
+MaxDistance = 25.0
 TempFolder = "./temp/"
