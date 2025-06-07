@@ -1,14 +1,23 @@
 Suburbs = [ 
+	# "darlington-nsw-2008",
+	# "redfern-nsw-2016",
+	# "ultimo-nsw-2007",
+	# "glebe-nsw-2037",
+	# "surry-hills-nsw-2010",
+	# "newtown-nsw-2042",
+	# "pyrmont-nsw-2009",
+	# "chippendale-nsw-2008",
+	# "annandale-nsw-2038",
+	# "eveleigh-nsw-2015",
+	# "stanmore-nsw-2048",
 	"petersham-nsw-2049",
 	"lewisham-nsw-2049",
 	"ashfield-nsw-2131",
-	"rosebery-nsw-2018",
 	"parramatta-nsw-2150",
 	"auburn-nsw-2144",
 	"clyde-nsw-2142",
 	"granville-nsw-2142",
 	"burwood-nsw-2134",
-	"petersham-nsw-2049",
 	"strathfield-nsw-2135",
 	"lidcombe-nsw-2141",
 	"homebush-nsw-2140",
@@ -19,7 +28,10 @@ Suburbs = [
 	"concord-west-nsw-2138"
 ]
 
-Availability = 2025-06-24T00:00:00Z
+Availability = 2025-06-30T00:00:00Z
 MaxDistance = 25.0
 TempFolder = "./temp/"
 IncludeNearbySuburbs = 0
+MinBedrooms = 2
+MinBathrooms = 2
+MaxRent = 1000

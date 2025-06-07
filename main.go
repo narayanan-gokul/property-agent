@@ -23,6 +23,9 @@ type Config struct {
 	MaxDistance float64
 	TempFolder string
 	IncludeNearbySuburbs int
+	MinBedrooms int
+	MinBathrooms int
+	MaxRent int
 }
 
 type Listing struct {
@@ -47,11 +50,15 @@ func (listing Listing) prettyPrint() {
 
 func (listing Listing) filePrintString() string {
 	return fmt.Sprintf(
-		"- [%s](%s)\n\t- Price: $%.0f\n\t- Available: %s\n\t- Location: %f, %f\n",
+		"- [%s](%s)\n\t- Price: $%.0f\n\t- Available: %s\n\t- Location: [%f, %f](https://google.com/maps/place/%f,%f/@%f,%f,17z/)\n",
 		listing.address,
 		listing.link,
 		listing.price,
 		listing.availability.Format(time.DateOnly),
+		listing.latitude,
+		listing.longitude,
+		listing.latitude,
+		listing.longitude,
 		listing.latitude,
 		listing.longitude,
 	)
@@ -147,10 +154,21 @@ func makeRequest(client *http.Client, URL string, metadata string) *http.Respons
 	return resp
 }
 
-func getListings(client *http.Client, suburbs []string, page int, includeNearbySuburbs int) (listings []string) {
+func getListings(
+	client *http.Client,
+	suburbs []string,
+	minBedrooms int,
+	minBathrooms int,
+	page int,
+	includeNearbySuburbs int,
+	maxRent int,
+) (listings []string) {
 	URL := fmt.Sprintf(
-		"https://www.domain.com.au/rent/?suburb=%s&bedrooms=2-any&bathrooms=2-any&price=0-1000&availableto=2025-07-14&excludedeposittaken=1&page=%d&ssubs=%d",
+		"https://www.domain.com.au/rent/?suburb=%s&bedrooms=%d-any&bathrooms=%d-any&price=0-%d&availableto=2025-07-14&excludedeposittaken=1&page=%d&ssubs=%d",
 		strings.Join(suburbs, ","),
+		minBedrooms,
+		minBathrooms,
+		maxRent,
 		page,
 		includeNearbySuburbs,
 	) 
@@ -265,7 +283,6 @@ func extractListing(client *http.Client, link string) (*Listing, error) {
 	listing.latitude = lat
 	listing.longitude = long
 
-	fmt.Println(priceString)
 	price, err := strconv.ParseFloat(priceString, 64)
 	if err != nil {
 		priceString = strings.Split(priceString, "/")[0]
@@ -283,17 +300,22 @@ func extractListing(client *http.Client, link string) (*Listing, error) {
 	return &listing, nil
 }
 
-func filterListings(client *http.Client, listings []string, availableDate time.Time, distance float64) []*Listing{
-	filteredListings := make([]*Listing, 0)
+func filterListings(client *http.Client, listings []string, availableDate time.Time, distance float64) (accepted []*Listing, rejected []*Listing) {
+	accepted = make([]*Listing, 0)
+	rejected = make([]*Listing, 0)
 	for _, listing := range listings {
 		extractedListing, err := extractListing(client, listing)
 		if err != nil {
 			continue
-		} else if !(extractedListing.distanceFrom(-33.888636, 151.187301) > distance) && availableDate.Before(extractedListing.availability) {
-			filteredListings = append(filteredListings, extractedListing)
+		} else if !(extractedListing.distanceFrom(-33.888636, 151.187301) > distance) {
+			if availableDate.Before(extractedListing.availability) {
+				accepted = append(accepted, extractedListing)
+			} else {
+				rejected = append(rejected, extractedListing)
+			}
 		}
 	}
-	return filteredListings
+	return accepted, rejected
 }
 
 func testInclude(client *http.Client) {
@@ -302,13 +324,13 @@ func testInclude(client *http.Client) {
 	log.Println(listing.filePrintString())
 }
 
-func createPropertiesFile(listings []*Listing, tempFolder string) {
-	fileName := fmt.Sprintf("properties-%s.md", time.Now().Format(time.DateTime))
+func createFile(prefix string, listings []*Listing, tempFolder string) {
+	fileName := fmt.Sprintf("%s-%s.md", prefix, time.Now().Format(time.DateTime))
 	log.Println("Creating file", fileName)
 	propertiesFile, err := os.Create(path.Join( tempFolder, fileName))
 	defer propertiesFile.Close()
 	if err != nil {
-		log.Println("Error creating file properties.md:", err)
+		log.Println("Error creating file", err)
 	}
 	log.Println("Writing listings to file")
 	writer := bufio.NewWriter(propertiesFile)
@@ -345,7 +367,15 @@ func main() {
 	var listings []string
 	page := 1
 	for {
-		resultsPerPage := getListings(client, config.Suburbs, page, config.IncludeNearbySuburbs)
+		resultsPerPage := getListings(
+			client,
+			config.Suburbs,
+			config.MinBedrooms,
+			config.MinBathrooms,
+			page,
+			config.IncludeNearbySuburbs,
+			config.MaxRent,
+		)
 		if len(resultsPerPage) == 0 {
 			break
 		}
@@ -354,13 +384,19 @@ func main() {
 		// time.Sleep(1 * time.Second)
 	}
 
-	filteredListings := filterListings(client, listings, config.Availability, config.MaxDistance)
-	createPropertiesFile(filteredListings, config.TempFolder)
+	accepted, rejected := filterListings(
+		client,
+		listings,
+		config.Availability,
+		config.MaxDistance,
+	)
+	createFile("accepted", accepted, config.TempFolder)
+	createFile("rejected", rejected, config.TempFolder)
 
 	endTime := time.Now()
 
 	log.Println("Operation complete.")
 	fmt.Println("Total listings:", len(listings))
-	fmt.Println("Listings matching criteria:", len(filteredListings))
+	fmt.Println("Listings matching criteria:", len(accepted))
 	fmt.Println("Time elapsed:", endTime.Sub(startTime) / time.Minute)
 }
