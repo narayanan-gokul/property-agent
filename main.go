@@ -22,6 +22,7 @@ type Config struct {
 	Availability time.Time
 	MaxDistance float64
 	TempFolder string
+	IncludeNearbySuburbs int
 }
 
 type Listing struct {
@@ -146,11 +147,12 @@ func makeRequest(client *http.Client, URL string, metadata string) *http.Respons
 	return resp
 }
 
-func getListings(client *http.Client, suburbs []string, page int) (listings []string) {
+func getListings(client *http.Client, suburbs []string, page int, includeNearbySuburbs int) (listings []string) {
 	URL := fmt.Sprintf(
-		"https://www.domain.com.au/rent/?suburb=%s&bedrooms=2-any&bathrooms=2-any&price=0-1000&availableto=2025-07-14&excludedeposittaken=1&page=%d",
+		"https://www.domain.com.au/rent/?suburb=%s&bedrooms=2-any&bathrooms=2-any&price=0-1000&availableto=2025-07-14&excludedeposittaken=1&page=%d&ssubs=%d",
 		strings.Join(suburbs, ","),
 		page,
+		includeNearbySuburbs,
 	) 
 	resp := makeRequest(client, URL, "GetAllListings")
 	defer resp.Body.Close()
@@ -343,13 +345,13 @@ func main() {
 	var listings []string
 	page := 1
 	for {
-		resultsPerPage := getListings(client, config.Suburbs, page)
+		resultsPerPage := getListings(client, config.Suburbs, page, config.IncludeNearbySuburbs)
 		if len(resultsPerPage) == 0 {
 			break
 		}
 		listings = append(listings, resultsPerPage...)
 		page++
-		time.Sleep(1 * time.Second)
+		// time.Sleep(1 * time.Second)
 	}
 
 	filteredListings := filterListings(client, listings, config.Availability, config.MaxDistance)

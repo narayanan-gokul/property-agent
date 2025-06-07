@@ -1,7 +1,7 @@
 notify-send -u low "Property checker" "Starting process"
 
 temp="/home/gokul/automation/property-agent/temp"
-./exec $temp 2> /home/gokul/automation/property-agent/log/log.txt
+./exec 2> /home/gokul/automation/property-agent/log/log.txt
 
 ls_result=$(ls /home/gokul/automation/property-agent/temp | grep properties | tail -n 2)
 IFS=$'\n' read -r -d '' -a files <<< "$ls_result"
