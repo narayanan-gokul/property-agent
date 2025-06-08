@@ -7,7 +7,13 @@ A simple go script for easy surfing of properties listed on domain.com.
 1. Ensure you have go installed on your system.
 2. Update parameters in the `config.toml` file. The parameters are self
 explanatory.
-3. The script can be run directly with:
+3. Run
+
+```
+$ go install
+```
+
+4. The script can be run directly with:
 
 ```
 $ go run main.go
