@@ -10,28 +10,28 @@ Suburbs = [
 	# "annandale-nsw-2038",
 	# "eveleigh-nsw-2015",
 	# "stanmore-nsw-2048",
-	"petersham-nsw-2049",
-	"lewisham-nsw-2049",
-	"ashfield-nsw-2131",
+	# "petersham-nsw-2049",
+	# "lewisham-nsw-2049",
+	# "ashfield-nsw-2131",
 	"parramatta-nsw-2150",
-	"auburn-nsw-2144",
-	"clyde-nsw-2142",
-	"granville-nsw-2142",
-	"burwood-nsw-2134",
+	# "auburn-nsw-2144",
+	# "clyde-nsw-2142",
+	# "granville-nsw-2142",
+	# "burwood-nsw-2134",
 	"strathfield-nsw-2135",
-	"lidcombe-nsw-2141",
-	"homebush-nsw-2140",
-	"homebush-west-nsw-2140",
-	"rhodes-nsw-2138",
-	"meadowbank-nsw-2114",
-	"north-strathfield-nsw-2137",
-	"concord-west-nsw-2138"
+	# "lidcombe-nsw-2141",
+	# "homebush-nsw-2140",
+	# "homebush-west-nsw-2140",
+	# "rhodes-nsw-2138",
+	# "meadowbank-nsw-2114",
+	# "north-strathfield-nsw-2137",
+	# "concord-west-nsw-2138"
 ]
 
-Availability = 2025-06-30T00:00:00Z
+Availability = 2025-06-01T00:00:00Z
 MaxDistance = 25.0
 TempFolder = "./temp/"
 IncludeNearbySuburbs = 0
-MinBedrooms = 2
+MinBedrooms = 4
 MinBathrooms = 2
-MaxRent = 1000
+MaxRent = 1200

@@ -325,6 +325,15 @@ func testInclude(client *http.Client) {
 }
 
 func createFile(prefix string, listings []*Listing, tempFolder string) {
+	_, err := os.Stat(tempFolder)
+	if err !=  nil {
+		log.Println("Temp folder does not exist. Creating one.")
+		err = os.Mkdir(tempFolder, os.ModeDir | 0700)
+		if err != nil {
+			log.Println("Fatal: can't create temp directory. Aborting. Please create one manually or try again later.")
+			os.Exit(1)
+		}
+	}
 	fileName := fmt.Sprintf("%s-%s.md", prefix, time.Now().Format(time.DateTime))
 	log.Println("Creating file", fileName)
 	propertiesFile, err := os.Create(path.Join( tempFolder, fileName))
